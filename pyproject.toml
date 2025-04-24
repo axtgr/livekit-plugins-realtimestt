@@ -1,0 +1,29 @@
+[project]
+name = "livekit-plugins-realtimestt"
+version = "0.0.0"
+description = "RealtimeSTT plugin for LiveKit"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Alex Schneider", email = "me@schneider.ax" }
+]
+keywords = ["webrtc", "realtime", "audio", "livekit", "speech-to-text", "stt", "stream"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3 :: Only",
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.7",
+]
