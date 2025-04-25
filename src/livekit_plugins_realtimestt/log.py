@@ -1,3 +1,3 @@
 import logging
 
-logger = logging.getLogger("livekit-plugins-realtimestt")
+logger = logging.getLogger(__name__)
