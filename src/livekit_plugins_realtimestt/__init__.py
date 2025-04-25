@@ -1,12 +1,11 @@
-from .embedded import EmbeddedSTT
-from .client import ClientSTT
+from .stt import STT, SpeechStream
 from .log import logger
 from livekit.agents import Plugin
 
 __version__ = "0.0.0"
 __all__ = [
-    "EmbeddedSTT",
-    "ClientSTT",
+    "STT",
+    "SpeechStream",
     "__version__",
 ]
 

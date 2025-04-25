@@ -1,8 +1,6 @@
-from abc import abstractmethod
 import threading
 import typing
 import weakref
-from dataclasses import dataclass
 
 from livekit import rtc
 from livekit.agents import (
@@ -17,6 +15,8 @@ from livekit.agents.types import (
 )
 from livekit.agents.utils import AudioBuffer
 
+from RealtimeSTT import AudioToTextRecorder, AudioToTextRecorderClient
+
 from .log import logger
 
 
@@ -25,24 +25,20 @@ BITS_PER_SAMPLE = 16
 NUM_CHANNELS = 1
 
 
-@dataclass
-class STTOptions:
-    language: str = ""
-    enable_realtime_transcription: bool = False
-
-
 class STT(stt.STT):
     def __init__(
         self,
         *,
-        options: STTOptions = STTOptions(),
+        use_client: bool = False,
+        options: typing.Dict[str, typing.Any],
     ):
-        options = STTOptions(**options)
         super().__init__(
             capabilities=stt.STTCapabilities(
-                streaming=True, interim_results=options.enable_realtime_transcription
+                streaming=True,
+                interim_results=options.get("enable_realtime_transcription", False),
             )
         )
+        self._use_client = use_client
         self._options = options
         self._SpeechStream = SpeechStream
         self._streams = weakref.WeakSet[SpeechStream]()
@@ -51,10 +47,23 @@ class STT(stt.STT):
     def prewarm(self):
         self._init_recorder()
 
-    @abstractmethod
-    async def _init_recorder(
-        self,
-    ) -> None: ...
+    def _init_recorder(self):
+        if self._recorder:
+            return
+        elif self._use_client:
+            self._recorder = AudioToTextRecorderClient(
+                autostart_server=False,
+                **self._options,
+                use_microphone=False,
+                on_realtime_transcription_update=self._on_interim_transcript,
+            )
+        else:
+            self._recorder = AudioToTextRecorder(
+                **self._options,
+                use_microphone=False,
+                spinner=False,
+                on_realtime_transcription_update=self._on_interim_transcript,
+            )
 
     async def aclose(self):
         for stream in self._streams:
@@ -84,7 +93,6 @@ class STT(stt.STT):
         self._init_recorder()
         stream = SpeechStream(
             stt=self,
-            options=self._options,
             conn_options=conn_options,
             recorder=self._recorder,
         )
@@ -101,13 +109,11 @@ class SpeechStream(stt.SpeechStream):
         self,
         *,
         stt: STT,
-        options: STTOptions,
         conn_options: APIConnectOptions,
         recorder: typing.Any,
     ) -> None:
         super().__init__(stt=stt, conn_options=conn_options, sample_rate=SAMPLE_RATE)
 
-        self._options = options
         self._recorder = recorder
         self._speaking = False
         self._recording = False
@@ -128,7 +134,7 @@ class SpeechStream(stt.SpeechStream):
         if not self._speaking:
             self._on_speech_start()
         speech_data = stt.SpeechData(
-            language=self._options.language,
+            language=self._recorder.language,
             text=text,
         )
         interim_event = stt.SpeechEvent(
@@ -139,7 +145,7 @@ class SpeechStream(stt.SpeechStream):
 
     def _on_final_transcript(self, text: str):
         speech_data = stt.SpeechData(
-            language=self._options.language,
+            language=self._recorder.language,
             text=text,
         )
         final_event = stt.SpeechEvent(
