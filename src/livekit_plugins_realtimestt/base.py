@@ -1,4 +1,6 @@
+from abc import abstractmethod
 import threading
+import typing
 import weakref
 from dataclasses import dataclass
 
@@ -8,17 +10,12 @@ from livekit.agents import (
     stt,
     utils,
 )
-from livekit.agents.stt import SpeechEventType, STTCapabilities
 from livekit.agents.types import (
     DEFAULT_API_CONNECT_OPTIONS,
     NOT_GIVEN,
     NotGivenOr,
 )
 from livekit.agents.utils import AudioBuffer, is_given
-
-from RealtimeSTT import (
-    AudioToTextRecorderClient,
-)
 
 from .log import logger
 
@@ -31,7 +28,7 @@ NUM_CHANNELS = 1
 @dataclass
 class STTOptions:
     language: str = ""
-    realtime: bool = False
+    enable_realtime_transcription: bool = False
 
 
 class STT(stt.STT):
@@ -42,16 +39,30 @@ class STT(stt.STT):
     ):
         options = STTOptions(**options)
         super().__init__(
-            capabilities=STTCapabilities(
-                streaming=True, interim_results=options.realtime
+            capabilities=stt.STTCapabilities(
+                streaming=True, interim_results=options.enable_realtime_transcription
             )
         )
         self._options = options
+        self._SpeechStream = SpeechStream
         self._streams = weakref.WeakSet[SpeechStream]()
+        self._recorder = None
+
+    def prewarm(self):
+        self._init_recorder()
+
+    @abstractmethod
+    async def _init_recorder(
+        self,
+    ) -> None: ...
 
     async def aclose(self):
         for stream in self._streams:
             await stream.aclose()
+
+        if self._recorder:
+            self._recorder.abort()
+            self._recorder.stop()
 
     def update_options(self, *, language: NotGivenOr[str] = NOT_GIVEN) -> None:
         if is_given(language):
@@ -68,30 +79,25 @@ class STT(stt.STT):
             "Non-streaming speech-to-text is not supported by RealtimeSTT at the moment"
         )
 
-    def _transcription_to_speech_event(
-        self,
-        text: str,
-        event_type: SpeechEventType = stt.SpeechEventType.INTERIM_TRANSCRIPT,
-    ) -> stt.SpeechEvent:
-        return stt.SpeechEvent(
-            type=event_type,
-            alternatives=[stt.SpeechData(text=text, language=self._language)],
-        )
-
     def stream(
         self,
         *,
         language: NotGivenOr[str] = NOT_GIVEN,
         conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
     ):
+        self._init_recorder()
         stream = SpeechStream(
             stt=self,
             options=self._options,
             conn_options=conn_options,
-            language=language,
+            recorder=self._recorder,
         )
         self._streams.add(stream)
         return stream
+
+    def _on_interim_transcript(self, text: str):
+        for stream in self._streams:
+            stream._on_interim_transcript(text)
 
 
 class SpeechStream(stt.SpeechStream):
@@ -101,20 +107,21 @@ class SpeechStream(stt.SpeechStream):
         stt: STT,
         options: STTOptions,
         conn_options: APIConnectOptions,
-        language: NotGivenOr[str] = NOT_GIVEN,
+        recorder: typing.Any,
     ) -> None:
         super().__init__(stt=stt, conn_options=conn_options, sample_rate=SAMPLE_RATE)
 
         self._options = options
-        self._language = language if is_given(language) else options.language or ""
-
+        self._recorder = recorder
         self._speaking = False
+        self._recording = False
 
     async def aclose(self):
-        if self._client:
-            self._client._recording = False
-            self._client.abort()
-            self._client.stop()
+        if self._recorder:
+            if hasattr(self._recorder, "_recording"):
+                self._recorder._recording = False
+            self._recording = False
+            self._speaking = False
 
     def _on_speech_start(self):
         self._speaking = True
@@ -147,15 +154,6 @@ class SpeechStream(stt.SpeechStream):
         self._speaking = False
 
     async def _run(self) -> None:
-        self._client = AudioToTextRecorderClient(
-            language=self._language,
-            use_microphone=False,
-            autostart_server=False,
-            on_realtime_transcription_update=self._on_interim_transcript,
-            enable_realtime_transcription=self._options.realtime,
-            realtime_model_type="base",
-        )
-
         @utils.log_exceptions(logger=logger)
         async def send():
             samples_50ms = self._needed_sr // 20
@@ -174,13 +172,15 @@ class SpeechStream(stt.SpeechStream):
                     frames.extend(audio_bstream.flush())
 
                 for frame in frames:
-                    self._client.feed_audio(frame.data.tobytes(), None)
+                    self._recorder.feed_audio(frame.data.tobytes(), None)
 
         def read():
-            self._client._recording = True
-            while self._client._recording:
+            self._recording = True
+            if hasattr(self._recorder, "_recording"):
+                self._recorder._recording = True
+            while self._recording:
                 try:
-                    text = self._client.text()
+                    text = self._recorder.text()
                 except Exception:
                     continue
                 self._on_final_transcript(text)
@@ -188,5 +188,5 @@ class SpeechStream(stt.SpeechStream):
         read_thread = threading.Thread(target=read)
         read_thread.start()
 
-        while self._client._recording:
+        while self._recording:
             await send()

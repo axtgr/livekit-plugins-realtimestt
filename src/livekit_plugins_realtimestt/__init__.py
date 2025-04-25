@@ -1,9 +1,14 @@
-from .stt import STT, SpeechStream
+from .embedded import EmbeddedSTT
+from .client import ClientSTT
 from .log import logger
 from livekit.agents import Plugin
 
 __version__ = "0.0.0"
-__all__ = ["STT", "SpeechStream", "__version__"]
+__all__ = [
+    "EmbeddedSTT",
+    "ClientSTT",
+    "__version__",
+]
 
 
 class RealtimeSTTPlugin(Plugin):
