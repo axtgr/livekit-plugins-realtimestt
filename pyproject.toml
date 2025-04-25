@@ -3,7 +3,8 @@ name = "livekit-plugins-realtimestt"
 dynamic = ["version"]
 description = "RealtimeSTT plugin for LiveKit"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "ISC"
+license-files = ["LICENSE"]
 authors = [
     { name = "Alex Schneider", email = "me@schneider.ax" }
 ]
