@@ -1,8 +1,8 @@
 from .stt import STT, SpeechStream
 from .log import logger
+from .version import __version__
 from livekit.agents import Plugin
 
-__version__ = "0.0.0"
 __all__ = [
     "STT",
     "SpeechStream",

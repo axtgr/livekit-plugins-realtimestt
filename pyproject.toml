@@ -1,6 +1,6 @@
 [project]
 name = "livekit-plugins-realtimestt"
-version = "0.0.0"
+dynamic = ["version"]
 description = "RealtimeSTT plugin for LiveKit"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -31,3 +31,6 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/livekit_plugins_realtimestt/version.py"
