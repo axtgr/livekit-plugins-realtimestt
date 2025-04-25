@@ -15,7 +15,7 @@ from livekit.agents.types import (
     NOT_GIVEN,
     NotGivenOr,
 )
-from livekit.agents.utils import AudioBuffer, is_given
+from livekit.agents.utils import AudioBuffer
 
 from .log import logger
 
@@ -63,10 +63,6 @@ class STT(stt.STT):
         if self._recorder:
             self._recorder.abort()
             self._recorder.stop()
-
-    def update_options(self, *, language: NotGivenOr[str] = NOT_GIVEN) -> None:
-        if is_given(language):
-            self._language = language
 
     async def _recognize_impl(
         self,
@@ -132,7 +128,7 @@ class SpeechStream(stt.SpeechStream):
         if not self._speaking:
             self._on_speech_start()
         speech_data = stt.SpeechData(
-            language=self._language,
+            language=self._options.language,
             text=text,
         )
         interim_event = stt.SpeechEvent(
@@ -143,7 +139,7 @@ class SpeechStream(stt.SpeechStream):
 
     def _on_final_transcript(self, text: str):
         speech_data = stt.SpeechData(
-            language=self._language,
+            language=self._options.language,
             text=text,
         )
         final_event = stt.SpeechEvent(
