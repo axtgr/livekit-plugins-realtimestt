@@ -633,7 +633,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "livekit", specifier = ">=1.0.6" },
-    { name = "livekit-agents", specifier = ">=1.0.17" },
+    { name = "livekit-agents", specifier = ">=1.0.14" },
     { name = "realtimestt", specifier = ">=0.3.103" },
 ]
 
